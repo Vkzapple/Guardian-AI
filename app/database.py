@@ -1,23 +1,6 @@
-"""
-Database layer -- Supabase (Postgres) untuk nyimpen histori sesi latihan.
-
-Kenapa pindah dari SQLite ke Supabase:
-- Bisa diakses dari mana aja (nggak keiket ke 1 laptop/server)
-- Ada dashboard visual buat liat data tanpa command line
-- Lebih siap kalau nanti webapp di-deploy (SQLite file-based kurang cocok
-  untuk multi-instance deployment)
-
-Setup:
-1. Buat project di supabase.com
-2. Jalankan supabase_schema.sql di SQL Editor project kamu
-3. Isi .env dengan SUPABASE_URL dan SUPABASE_SERVICE_KEY
-   (ambil dari Project Settings -> API)
-"""
-
 import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -32,52 +15,104 @@ def get_client() -> Client:
     if _client is None:
         if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
             raise RuntimeError(
-                "SUPABASE_URL / SUPABASE_SERVICE_KEY belum di-set. "
-                "Cek file .env kamu (lihat .env.example)."
+                "SUPABASE_URL / SUPABASE_SERVICE_KEY belum di-set. Cek file .env kamu."
             )
         _client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     return _client
 
 
 def init_db():
-    """Cek koneksi ke Supabase jalan atau nggak saat server startup.
-    (Tabel sendiri dibuat manual lewat supabase_schema.sql, bukan di sini.)"""
     client = get_client()
-    # Ping sederhana: coba select 1 baris, kalau tabel belum ada ini bakal error
-    # dengan pesan yang jelas ketimbang error nyasar pas request pertama masuk.
     try:
-        client.table("sessions").select("id").limit(1).execute()
-        print("✅ Koneksi Supabase berhasil, tabel 'sessions' ditemukan.")
+        client.table("users").select("id").limit(1).execute()
+        print("Koneksi Supabase berhasil, tabel 'users' ditemukan.")
     except Exception as e:
-        print(f"⚠️  Gagal konek/tabel belum ada: {e}")
-        print("   -> Pastikan sudah menjalankan supabase_schema.sql di SQL Editor Supabase.")
+        print(f" Gagal konek/tabel belum ada: {e}")
 
-
-def save_session(user_id: str, fatigue_score: float, hr_zone: int,
-                  hr_pct_of_max: float, duration_in_high_zone_min: float, goal: str):
+def create_user(name: str, sport: str, age: int, gender: str, height_cm: float,
+                    weight_kg: float, training_history: str,
+                    resting_hr: float | None = None, max_hr: float | None = None) -> dict:
     client = get_client()
-    client.table("sessions").insert({
+    payload = {
+        "name": name, "sport": sport, "age": age, "gender": gender,
+        "height_cm": height_cm, "weight_kg": weight_kg,
+        "training_history": training_history,
+    }
+    if resting_hr is not None:
+        payload["resting_hr"] = resting_hr
+    if max_hr is not None:
+        payload["max_hr"] = max_hr
+    response = client.table("users").insert(payload).execute()
+    return response.data[0]
+
+
+def get_user(user_id: str) -> dict | None:
+    client = get_client()
+    response = client.table("users").select("*").eq("id", user_id).limit(1).execute()
+    return response.data[0] if response.data else None
+
+
+def list_users() -> list[dict]:
+    client = get_client()
+    response = client.table("users").select("*").order("created_at", desc=True).execute()
+    return response.data or []
+
+
+def save_reading(user_id: str, hr_current: float, hr_pct_of_max: float,
+                  breathing_rate: float, sleep_hours_last_night: float,
+                  rpe_self_report: float, speed_decline_pct: float,
+                  duration_in_high_zone_min: float, bmi: float,
+                  fatigue_score: float, risk_level: str, hr_zone: int,
+                  recommendation: str, condition_status: str,
+                  recovery_estimate_minutes: int, early_warning: bool,
+                  warning_reasons: list[str]) -> dict:
+    client = get_client()
+    response = client.table("readings").insert({
         "user_id": user_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "fatigue_score": fatigue_score,
-        "hr_zone": hr_zone,
+        "hr_current": hr_current,
         "hr_pct_of_max": hr_pct_of_max,
+        "breathing_rate": breathing_rate,
+        "sleep_hours_last_night": sleep_hours_last_night,
+        "rpe_self_report": rpe_self_report,
+        "speed_decline_pct": speed_decline_pct,
         "duration_in_high_zone_min": duration_in_high_zone_min,
-        "goal": goal,
+        "bmi": bmi,
+        "fatigue_score": fatigue_score,
+        "risk_level": risk_level,
+        "hr_zone": hr_zone,
+        "recommendation": recommendation,
+        "condition_status": condition_status,
+        "recovery_estimate_minutes": recovery_estimate_minutes,
+        "early_warning": early_warning,
+        "warning_reasons": warning_reasons,
     }).execute()
+    return response.data[0]
 
 
-def get_recent_sessions(user_id: str, limit: int = 10) -> list[dict]:
+def get_recent_readings(user_id: str, limit: int = 10) -> list[dict]:
     client = get_client()
     response = (
-        client.table("sessions")
+        client.table("readings")
         .select("*")
         .eq("user_id", user_id)
-        .order("timestamp", desc=True)
+        .order("recorded_at", desc=True)
         .limit(limit)
         .execute()
     )
     rows = response.data or []
-    # Balik urutannya jadi kronologis (lama -> baru) biar konsisten sama
-    # logic analyze_progressive_overload() yang sudah ada.
-    return list(reversed(rows))
+    return list(reversed(rows))  # kronologis lama -> baru
+
+
+
+def save_alert(user_id: str, user_name: str, status: str,
+                reasons: list[str], fatigue_score: float) -> dict:
+    client = get_client()
+    response = client.table("alerts").insert({
+        "user_id": user_id,
+        "user_name": user_name,
+        "status": status,
+        "reasons": reasons,
+        "fatigue_score": fatigue_score,
+    }).execute()
+    return response.data[0]
+

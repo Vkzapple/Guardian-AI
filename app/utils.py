@@ -1,8 +1,3 @@
-"""
-Helper functions -- semua rumus sports science (Tanaka, Karvonen, BMI)
-dan logic turunan (risk level, rekomendasi) ada di sini, terpisah dari
-main.py biar rapi.
-"""
 
 
 def calculate_hr_max(age: int) -> float:

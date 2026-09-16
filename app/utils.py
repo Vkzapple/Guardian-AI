@@ -1,5 +1,3 @@
-
-
 def calculate_hr_max(age: int) -> float:
     """Formula Tanaka -- sudah divalidasi vs dataset Gym Members Exercise
     (selisih rata-rata cuma ~1 bpm dari data real)."""
@@ -7,14 +5,12 @@ def calculate_hr_max(age: int) -> float:
 
 
 def estimate_hr_rest(training_history: str) -> float:
-    """Estimasi default HR rest kalau user tidak input manual,
-    berdasarkan kalibrasi dataset real (hr_rest_mean ~62)."""
+    """Estimasi default HR rest kalau tidak dikirim di request."""
     defaults = {"pemula": 69, "rutin": 62, "terlatih": 52}
     return defaults.get(training_history, 62)
 
 
 def calculate_hr_zone(hr_pct_of_max: float) -> int:
-    """Bagi ke 5 zona standar sports science berdasarkan % HR max."""
     if hr_pct_of_max < 0.6:
         return 1
     elif hr_pct_of_max < 0.7:
@@ -33,7 +29,10 @@ def calculate_bmi(weight_kg: float, height_cm: float) -> float:
 
 
 def get_risk_level(fatigue_score: float) -> str:
-    """Kategori risiko dari fatigue_score 0-100."""
+    """Kategori risiko dalam Bahasa Indonesia -- backend Node.js men-decode
+    ini lewat keyword matching ('aman'/'waspada'/'bahaya'/dst) jadi status
+    internal (optimal/caution/warning/critical), jadi kata kuncinya harus
+    tetap konsisten."""
     if fatigue_score < 40:
         return "Aman"
     elif fatigue_score < 65:
@@ -42,106 +41,6 @@ def get_risk_level(fatigue_score: float) -> str:
         return "Berisiko"
     else:
         return "Kritis"
-
-
-def get_bmi_category(bmi: float) -> str:
-    if bmi < 18.5:
-        return "Underweight"
-    elif bmi < 25:
-        return "Normal"
-    elif bmi < 30:
-        return "Overweight"
-    else:
-        return "Obese"
-
-
-# ============================================================
-# INSIGHT GENERATOR -- setiap fungsi return kalimat siap-baca,
-# bukan angka mentah. Webapp tinggal nampilin string-nya langsung.
-# ============================================================
-
-def build_headline(fatigue_score: float, risk_level: str) -> str:
-    """1 kalimat ringkasan utama, ditampilkan paling besar di dashboard."""
-    templates = {
-        "Aman": f"Kondisi kamu bagus (skor {fatigue_score:.0f}/100) -- tubuh masih punya banyak ruang untuk latihan.",
-        "Waspada": f"Mulai ada tanda kelelahan (skor {fatigue_score:.0f}/100) -- perhatikan sinyal tubuh 10-15 menit ke depan.",
-        "Berisiko": f"Tubuh kamu sedang bekerja keras (skor {fatigue_score:.0f}/100) -- saatnya turunkan intensitas.",
-        "Kritis": f"Kelelahan tinggi terdeteksi (skor {fatigue_score:.0f}/100) -- disarankan berhenti dan istirahat.",
-    }
-    return templates.get(risk_level, f"Skor fatigue kamu: {fatigue_score:.0f}/100")
-
-
-def build_hr_status(hr_current: float, hr_max: float, hr_pct_of_max: float, hr_zone: int) -> str:
-    """Terjemahin angka HR jadi kalimat yang punya makna personal."""
-    pct = round(hr_pct_of_max * 100)
-    zone_desc = {
-        1: "zona recovery (sangat ringan)",
-        2: "zona pembakaran lemak (ringan-sedang)",
-        3: "zona tempo (sedang)",
-        4: "zona threshold (berat)",
-        5: "zona maksimal (sangat berat)",
-    }
-    return (
-        f"Detak jantung kamu sekarang {hr_current:.0f} bpm, atau {pct}% dari HR Max "
-        f"personal kamu ({hr_max:.0f} bpm) -- ini masuk {zone_desc.get(hr_zone, 'zona tidak diketahui')} (Zona {hr_zone})."
-    )
-
-
-def build_body_status(bmi: float, height_cm: float, weight_kg: float) -> str:
-    category = get_bmi_category(bmi)
-    category_id = {
-        "Underweight": "kurang dari ideal (underweight)",
-        "Normal": "ideal (normal)",
-        "Overweight": "di atas ideal (overweight)",
-        "Obese": "jauh di atas ideal (obese)",
-    }
-    return (
-        f"Dengan tinggi {height_cm:.0f} cm dan berat {weight_kg:.0f} kg, BMI kamu {bmi:.1f} -- "
-        f"tergolong {category_id.get(category, category)}. Ini yang dipakai sistem untuk "
-        f"menyesuaikan jenis latihan yang direkomendasikan."
-    )
-
-
-def build_goal_insight(fatigue_score: float, hr_zone: int, goal: str) -> str:
-    """Insight yang beda maknanya tergantung tujuan user -- fatigue score
-    yang sama bisa berarti beda tergantung goal."""
-    if goal == "turun_bb":
-        if hr_zone <= 2:
-            return (
-                "Kamu ada di zona pembakaran lemak -- pertahankan durasi di zona ini "
-                "selama mungkin, ini lebih efektif untuk turun berat badan dibanding buru-buru ke zona tinggi."
-            )
-        elif hr_zone >= 4:
-            return (
-                "Intensitas kamu sudah di atas zona pembakaran lemak optimal. Untuk goal turun BB, "
-                "pertimbangkan turunkan sedikit ke Zona 2-3 agar bisa bertahan lebih lama."
-            )
-        return "Intensitas kamu sudah pas untuk goal turun berat badan, tetap konsisten."
-    elif goal == "naik_otot":
-        if fatigue_score >= 65:
-            return (
-                "Fatigue tinggi setelah latihan beban itu wajar -- ini indikasi otot mendapat stimulus "
-                "yang cukup. Fokus sekarang: recovery dan asupan protein, bukan menahan diri."
-            )
-        return "Kondisi kamu masih cukup segar. Kalau targetnya naik otot, pastikan intensitas latihan beban cukup menantang."
-    else:  # sehat
-        return "Fokus kamu untuk kesehatan umum sudah on-track -- konsistensi di Zona 2-3 lebih penting daripada intensitas maksimal."
-
-
-def get_warning(injury_history: str, hr_zone: int, speed_decline_pct: float) -> str | None:
-    """Warning tambahan berdasarkan riwayat cedera -- threshold lebih sensitif
-    kalau user pernah cedera di area tertentu."""
-    injury_labels = {
-        "lutut": "lutut", "pergelangan_kaki": "pergelangan kaki",
-        "punggung": "punggung", "lainnya": "area yang pernah cedera",
-    }
-    if injury_history in injury_labels and (hr_zone >= 4 or speed_decline_pct >= 20):
-        area = injury_labels[injury_history]
-        return (
-            f"Kamu punya riwayat cedera di {area}. Intensitas saat ini cukup tinggi -- "
-            f"perhatikan teknik gerakan dan pertimbangkan hentikan lebih awal kalau terasa nyeri di {area}."
-        )
-    return None
 
 
 def get_recommendation(fatigue_score: float, hr_zone: int, bmi: float, training_history: str) -> str:
@@ -180,79 +79,144 @@ def get_recommendation(fatigue_score: float, hr_zone: int, bmi: float, training_
     return base + history_note.get(training_history, "")
 
 
-# ============================================================
-# PROGRESSIVE OVERLOAD ANALYSIS -- butuh histori beberapa sesi terakhir
-# ============================================================
+def estimate_vo2max(hr_max: float, hr_rest: float) -> float:
+    """Formula Uth-Sorensen-Overgaard-Pedersen -- estimasi VO2max dari
+    rasio HR Max terhadap HR Rest. Published, banyak dipakai di riset
+    sports science sebagai estimasi cepat tanpa tes lab."""
+    return 15.3 * (hr_max / hr_rest)
 
-def analyze_progressive_overload(sessions: list[dict]) -> dict:
-    """Analisis tren fatigue_score dari histori sesi, kasih rekomendasi
-    naik/turun/pertahankan beban latihan.
 
-    sessions: list of dict, urutan kronologis (lama -> baru), tiap dict
-    punya key: fatigue_score, hr_zone, duration_in_high_zone_min, timestamp
+def estimate_pace_zones(hr_rest: float, hr_max: float) -> dict:
+    """Hitung range pace (menit:detik per km) untuk tiap HR zone,
+    personal per user (berdasarkan HR max & HR rest mereka sendiri).
+
+    Alur: VO2max -> velocity di VO2max (vVO2max, pakai formula ACSM
+    metabolic equation) -> velocity tiap zone sebagai % dari vVO2max
+    -> dikonversi ke pace (menit/km).
     """
-    if len(sessions) < 2:
-        return {
-            "status": "belum_cukup_data",
-            "headline": "Butuh minimal 2 sesi latihan untuk mulai menganalisis tren progres kamu.",
-            "trend": None,
-            "overload_recommendation": None,
-        }
+    vo2max = estimate_vo2max(hr_max, hr_rest)
 
-    # Ambil sampai 5 sesi terakhir buat analisis tren
-    recent = sessions[-5:]
-    scores = [s["fatigue_score"] for s in recent]
-
-    # Tren sederhana: bandingkan rata-rata separuh awal vs separuh akhir
-    mid = len(scores) // 2
-    if mid == 0:
-        first_half_avg = scores[0]
-        second_half_avg = scores[-1]
-    else:
-        first_half_avg = sum(scores[:mid]) / mid
-        second_half_avg = sum(scores[mid:]) / (len(scores) - mid)
-
-    delta = second_half_avg - first_half_avg
-
-    if delta <= -5:
-        trend = "menurun"
-        headline = (
-            f"Fatigue score kamu cenderung menurun dari sesi-sesi sebelumnya "
-            f"({first_half_avg:.0f} -> {second_half_avg:.0f}) -- tanda kondisi kardiovaskular membaik."
-        )
-        overload_recommendation = (
-            "Sistem merekomendasikan naikkan beban latihan sekitar 10-15% "
-            "(durasi atau intensitas) di sesi berikutnya untuk progressive overload yang optimal."
-        )
-        action = "naikkan_beban"
-    elif delta >= 5:
-        trend = "meningkat"
-        headline = (
-            f"Fatigue score kamu cenderung naik dari sesi-sesi sebelumnya "
-            f"({first_half_avg:.0f} -> {second_half_avg:.0f}) -- tubuh butuh waktu pemulihan lebih."
-        )
-        overload_recommendation = (
-            "Sistem merekomendasikan pertahankan atau sedikit turunkan beban latihan, "
-            "dan pastikan waktu istirahat antar sesi cukup sebelum menambah beban lagi."
-        )
-        action = "turunkan_atau_pertahankan"
-    else:
-        trend = "stabil"
-        headline = (
-            f"Fatigue score kamu relatif stabil di kisaran {second_half_avg:.0f} beberapa sesi terakhir."
-        )
-        overload_recommendation = (
-            "Kondisi kamu konsisten. Sistem merekomendasikan naikkan beban sedikit (5-10%) "
-            "untuk mulai mendorong adaptasi baru, selama tidak ada tanda kelelahan berlebih."
-        )
-        action = "naikkan_bertahap"
-
-    return {
-        "status": "ok",
-        "headline": headline,
-        "trend": trend,
-        "action": action,
-        "overload_recommendation": overload_recommendation,
-        "sessions_analyzed": len(recent),
-        "avg_fatigue_recent": round(second_half_avg, 1),
+    # ACSM running metabolic equation (VO2 dalam ml/kg/min, speed dalam m/min):
+    # VO2 = 0.2 * speed + 3.5  ->  speed = (VO2 - 3.5) / 0.2
+    v_vo2max_m_per_min = (vo2max - 3.5) / 0.2
+    v_vo2max_kmh = v_vo2max_m_per_min * 60 / 1000
+    # % dari vVO2max per HR zone (berdasarkan korelasi HR%-velocity%
+    zone_velocity_pct = {
+        1: (0.55, 0.65),  # Recovery
+        2: (0.65, 0.78),  # Easy / aerobic
+        3: (0.78, 0.88),  # Tempo
+        4: (0.88, 0.95),  # Threshold
+        5: (0.95, 1.02),  # Interval / VO2max
     }
+
+    def kmh_to_pace_str(kmh: float) -> str:
+        if kmh <= 0:
+            return "-"
+        pace_min_per_km = 60 / kmh
+        minutes = int(pace_min_per_km)
+        seconds = int(round((pace_min_per_km - minutes) * 60))
+        if seconds == 60:
+            minutes += 1
+            seconds = 0
+        return f"{minutes}:{seconds:02d}"
+
+    zones = {}
+    for zone, (pct_low, pct_high) in zone_velocity_pct.items():
+        v_low = v_vo2max_kmh * pct_low
+        v_high = v_vo2max_kmh * pct_high
+        # Pace berbanding terbalik dengan velocity => velocity rendah = pace lambat (angka besar)
+        zones[zone] = {
+            "pace_range": f"{kmh_to_pace_str(v_high)}-{kmh_to_pace_str(v_low)} /km",
+            "velocity_kmh_range": [round(v_low, 1), round(v_high, 1)],
+        }
+    return zones
+
+
+def get_pace_recommendation(hr_rest: float, hr_max: float, target_hr_zone: int) -> dict:
+    """Rekomendasi pace konkret untuk 1 target HR zone spesifik
+    (dipakai buat next_session_recommendation)."""
+    zones = estimate_pace_zones(hr_rest, hr_max)
+    target = zones.get(target_hr_zone, zones[2])
+    return {
+        "target_hr_zone": target_hr_zone,
+        "pace_range": target["pace_range"],
+    }
+
+
+def calculate_acwr_injury_risk(recent_fatigue_scores: list) -> tuple[float, str]:
+    n = len(recent_fatigue_scores)
+    acute_window = min(3, n)
+    acute_load = sum(recent_fatigue_scores[-acute_window:]) / acute_window
+    chronic_load = sum(recent_fatigue_scores) / n  # semua data yang ada sbg proxy chronic (s.d. 28)
+
+    if chronic_load == 0:
+        acwr = 1.0
+    else:
+        acwr = acute_load / chronic_load
+
+    import math
+    risk = 1 / (1 + math.exp(-6 * (acwr - 1.3)))
+    risk_percent = round(risk * 100, 1)
+
+    return risk_percent, "acwr"
+
+
+def calculate_fallback_injury_risk(
+    fatigue_score: float, hr_zone: int, injury_history: str, speed_decline_pct: float
+) -> tuple[float, str]:
+    """Fallback if histori <5 sesi -- estimasi dari sinyal sesi
+    saat ini saja."""
+    base = fatigue_score * 0.55  # fatigue tinggi => kontribusi terbesar
+    zone_add = {1: 0, 2: 0, 3: 5, 4: 12, 5: 20}.get(hr_zone, 0)
+    injury_add = 15 if (injury_history and injury_history != "tidak_ada") else 0
+    decline_add = min(speed_decline_pct * 0.3, 15)
+
+    risk_percent = min(base + zone_add + injury_add + decline_add, 97)
+    return round(risk_percent, 1), "heuristic_awal"
+
+
+def build_next_session_recommendation(
+    injury_risk_percent: float, hr_rest: float, hr_max: float,
+    current_hr_zone: int, sport: str = "lari",
+) -> dict:
+    """translate injury risk % jadi rekomendasi dalam bahasa buat user:target HR bpm + pace"""
+    if injury_risk_percent >= 50:
+        target_zone = max(1, current_hr_zone - 2)
+        urgency = f"Risiko cedera terdeteksi {injury_risk_percent:.0f}%."
+    elif injury_risk_percent >= 30:
+        target_zone = max(1, current_hr_zone - 1)
+        urgency = f"Risiko cedera mulai naik ({injury_risk_percent:.0f}%)."
+    else:
+        target_zone = current_hr_zone
+        urgency = f"Risiko cedera masih rendah ({injury_risk_percent:.0f}%)."
+
+    zone_upper_pct = {1: 0.6, 2: 0.7, 3: 0.8, 4: 0.9, 5: 1.0}
+    target_hr_bpm = round(hr_rest + (hr_max - hr_rest) * zone_upper_pct.get(target_zone, 0.7))
+
+    pace_info = get_pace_recommendation(hr_rest, hr_max, target_zone) if sport == "lari" else None
+
+    if injury_risk_percent >= 50:
+        text = (
+            f"{urgency} Turunkan HR latihan berikutnya ke bawah {target_hr_bpm} bpm "
+            f"(Zona {target_zone})"
+        )
+        if pace_info:
+            text += f", setara pace {pace_info['pace_range']}."
+        else:
+            text += "."
+        text += " Pertimbangkan istirahat 1 hari sebelum sesi berikutnya."
+    else:
+        text = f"{urgency} Target HR sesi berikutnya di bawah {target_hr_bpm} bpm (Zona {target_zone})"
+        if pace_info:
+            text += f", setara pace {pace_info['pace_range']}."
+        else:
+            text += "."
+
+    result = {
+        "target_hr_bpm": target_hr_bpm,
+        "target_hr_zone": target_zone,
+        "text": text,
+    }
+    if pace_info:
+        result["target_pace_range"] = pace_info["pace_range"]
+    return result
